@@ -524,19 +524,57 @@ register_node() {
     
     echo -e "${CYAN}在 Devnet 5 测试网络注册节点...${NC}"
     
-    # 检查同步状态
-    echo -e "${YELLOW}检查区块链同步状态...${NC}"
-    local sync_output=$(run_rocketpool node sync 2>&1)
-    if echo "$sync_output" | grep -q "syncing"; then
-        echo -e "${YELLOW}⚠️  警告：区块链仍在同步中${NC}"
-        echo -e "${CYAN}建议：等待同步完成后再注册节点${NC}"
-        echo -e "${CYAN}可以使用选项 13 检查同步状态${NC}"
+    # 检查同步状态（带超时）
+    echo -e "${YELLOW}检查区块链同步状态（最多等待 30 秒）...${NC}"
+    echo -e "${CYAN}如果卡住，可以按 Ctrl+C 中断，然后直接尝试注册${NC}"
+    
+    # 使用 timeout 命令，如果系统不支持则直接执行
+    if command -v timeout &> /dev/null; then
+        local sync_output=$(timeout 30 run_rocketpool node sync 2>&1)
+        local sync_timeout=$?
+        if [ $sync_timeout -eq 124 ]; then
+            echo -e "${YELLOW}⚠️  同步状态检查超时（30秒）${NC}"
+            echo -e "${CYAN}建议：如果选项 13 显示已同步，可以直接继续注册${NC}"
+            echo
+            read -p "是否继续尝试注册？(y/n): " continue_register
+            if [ "$continue_register" != "y" ] && [ "$continue_register" != "Y" ]; then
+                echo -e "${YELLOW}已取消注册${NC}"
+                press_any_key
+                return
+            fi
+        elif echo "$sync_output" | grep -q "syncing"; then
+            echo -e "${YELLOW}⚠️  警告：区块链仍在同步中${NC}"
+            echo -e "${CYAN}建议：等待同步完成后再注册节点${NC}"
+            echo -e "${CYAN}可以使用选项 13 检查同步状态${NC}"
+            echo
+            read -p "是否继续尝试注册？(y/n): " continue_register
+            if [ "$continue_register" != "y" ] && [ "$continue_register" != "Y" ]; then
+                echo -e "${YELLOW}已取消注册${NC}"
+                press_any_key
+                return
+            fi
+        else
+            echo -e "${GREEN}✓ 区块链同步状态检查完成${NC}"
+        fi
+    else
+        # 如果没有 timeout 命令，直接询问用户
+        echo -e "${CYAN}提示：如果选项 13 显示已完全同步，可以直接继续${NC}"
         echo
-        read -p "是否继续尝试注册？(y/n): " continue_register
-        if [ "$continue_register" != "y" ] && [ "$continue_register" != "Y" ]; then
-            echo -e "${YELLOW}已取消注册${NC}"
-            press_any_key
-            return
+        read -p "是否跳过同步检查，直接尝试注册？(y/n，默认y): " skip_sync_check
+        if [ "${skip_sync_check:-y}" != "y" ] && [ "${skip_sync_check:-y}" != "Y" ]; then
+            echo -e "${YELLOW}正在检查同步状态（可能需要一些时间）...${NC}"
+            local sync_output=$(run_rocketpool node sync 2>&1)
+            if echo "$sync_output" | grep -q "syncing"; then
+                echo -e "${YELLOW}⚠️  警告：区块链仍在同步中${NC}"
+                echo -e "${CYAN}建议：等待同步完成后再注册节点${NC}"
+                echo
+                read -p "是否继续尝试注册？(y/n): " continue_register
+                if [ "$continue_register" != "y" ] && [ "$continue_register" != "Y" ]; then
+                    echo -e "${YELLOW}已取消注册${NC}"
+                    press_any_key
+                    return
+                fi
+            fi
         fi
     fi
     
@@ -616,19 +654,57 @@ create_minipool() {
     echo -e "${CYAN}在 Devnet 5 测试网络创建 Minipool...${NC}"
     echo -e "${YELLOW}注意: 需要测试网 ETH${NC}"
     
-    # 检查同步状态
-    echo -e "${YELLOW}检查区块链同步状态...${NC}"
-    local sync_output=$(run_rocketpool node sync 2>&1)
-    if echo "$sync_output" | grep -q "syncing"; then
-        echo -e "${YELLOW}⚠️  警告：区块链仍在同步中${NC}"
-        echo -e "${CYAN}建议：等待同步完成后再创建 Minipool${NC}"
-        echo -e "${CYAN}可以使用选项 13 检查同步状态${NC}"
+    # 检查同步状态（带超时）
+    echo -e "${YELLOW}检查区块链同步状态（最多等待 30 秒）...${NC}"
+    echo -e "${CYAN}如果卡住，可以按 Ctrl+C 中断，然后直接尝试创建${NC}"
+    
+    # 使用 timeout 命令，如果系统不支持则直接执行
+    if command -v timeout &> /dev/null; then
+        local sync_output=$(timeout 30 run_rocketpool node sync 2>&1)
+        local sync_timeout=$?
+        if [ $sync_timeout -eq 124 ]; then
+            echo -e "${YELLOW}⚠️  同步状态检查超时（30秒）${NC}"
+            echo -e "${CYAN}建议：如果选项 13 显示已同步，可以直接继续创建${NC}"
+            echo
+            read -p "是否继续尝试创建？(y/n): " continue_deposit
+            if [ "$continue_deposit" != "y" ] && [ "$continue_deposit" != "Y" ]; then
+                echo -e "${YELLOW}已取消创建${NC}"
+                press_any_key
+                return
+            fi
+        elif echo "$sync_output" | grep -q "syncing"; then
+            echo -e "${YELLOW}⚠️  警告：区块链仍在同步中${NC}"
+            echo -e "${CYAN}建议：等待同步完成后再创建 Minipool${NC}"
+            echo -e "${CYAN}可以使用选项 13 检查同步状态${NC}"
+            echo
+            read -p "是否继续尝试创建？(y/n): " continue_deposit
+            if [ "$continue_deposit" != "y" ] && [ "$continue_deposit" != "Y" ]; then
+                echo -e "${YELLOW}已取消创建${NC}"
+                press_any_key
+                return
+            fi
+        else
+            echo -e "${GREEN}✓ 区块链同步状态检查完成${NC}"
+        fi
+    else
+        # 如果没有 timeout 命令，直接询问用户
+        echo -e "${CYAN}提示：如果选项 13 显示已完全同步，可以直接继续${NC}"
         echo
-        read -p "是否继续尝试创建？(y/n): " continue_deposit
-        if [ "$continue_deposit" != "y" ] && [ "$continue_deposit" != "Y" ]; then
-            echo -e "${YELLOW}已取消创建${NC}"
-            press_any_key
-            return
+        read -p "是否跳过同步检查，直接尝试创建？(y/n，默认y): " skip_sync_check
+        if [ "${skip_sync_check:-y}" != "y" ] && [ "${skip_sync_check:-y}" != "Y" ]; then
+            echo -e "${YELLOW}正在检查同步状态（可能需要一些时间）...${NC}"
+            local sync_output=$(run_rocketpool node sync 2>&1)
+            if echo "$sync_output" | grep -q "syncing"; then
+                echo -e "${YELLOW}⚠️  警告：区块链仍在同步中${NC}"
+                echo -e "${CYAN}建议：等待同步完成后再创建 Minipool${NC}"
+                echo
+                read -p "是否继续尝试创建？(y/n): " continue_deposit
+                if [ "$continue_deposit" != "y" ] && [ "$continue_deposit" != "Y" ]; then
+                    echo -e "${YELLOW}已取消创建${NC}"
+                    press_any_key
+                    return
+                fi
+            fi
         fi
     fi
     
