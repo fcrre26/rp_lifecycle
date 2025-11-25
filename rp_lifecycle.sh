@@ -615,10 +615,48 @@ register_node() {
     fi
     
     echo
-    echo -e "${YELLOW}正在注册节点到 Rocket Pool 网络...${NC}"
-    echo -e "${CYAN}这可能需要一些时间，请稍候...${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}Gas 费用设置${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
     echo
-    local register_output=$(run_rocketpool node register 2>&1)
+    echo -e "${GREEN}Gas 费用说明：${NC}"
+    echo -e "${CYAN}  • Max Fee（最大费用）：您愿意支付的最高费用上限${NC}"
+    echo -e "${CYAN}  • Max Priority Fee（优先费用）：给矿工的小费，让交易更快确认${NC}"
+    echo -e "${CYAN}  • 实际支付 = 网络当前费用 + 优先费用（不会超过 Max Fee）${NC}"
+    echo
+    echo -e "${YELLOW}举例说明：${NC}"
+    echo -e "${CYAN}  如果设置 Max Fee = 50 gwei, Priority Fee = 2 gwei${NC}"
+    echo -e "${CYAN}  网络当前费用 = 10 gwei${NC}"
+    echo -e "${CYAN}  实际支付 = 10 + 2 = 12 gwei（不是 50 gwei！）${NC}"
+    echo -e "${CYAN}  50 gwei 只是上限，表示"我愿意最多付这么多"${NC}"
+    echo
+    echo -e "${GREEN}推荐设置（Hoodi 测试网，费用很低）：${NC}"
+    echo -e "${CYAN}  • Max Fee: 10-20 gwei（测试网足够，主网可能需要更高）${NC}"
+    echo -e "${CYAN}  • Max Priority Fee: 2 gwei（给矿工的小费）${NC}"
+    echo
+    echo -e "${YELLOW}自定义 Gas 费用（直接按回车使用推荐值）：${NC}"
+    read -p "Max Fee (gwei，默认 10，测试网建议 10-20): " max_fee
+    max_fee=${max_fee:-10}
+    
+    read -p "Max Priority Fee (gwei，默认 2): " max_priority_fee
+    max_priority_fee=${max_priority_fee:-2}
+    
+    echo
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}注册过程说明${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}接下来系统会询问：${NC}"
+    echo -e "${CYAN}  1. 是否自动检测时区（建议选择 y）${NC}"
+    echo -e "${CYAN}  2. 确认检测到的时区（如 Asia/Hong_Kong）${NC}"
+    echo -e "${CYAN}  3. 确认费用估算（约 0.02-0.04 ETH）${NC}"
+    echo -e "${CYAN}  4. 最终确认注册${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    echo -e "${YELLOW}正在注册节点到 Rocket Pool 网络...${NC}"
+    echo -e "${CYAN}使用 Gas 费用: Max Fee=${max_fee} gwei, Priority Fee=${max_priority_fee} gwei${NC}"
+    echo -e "${CYAN}请按照提示回答相关问题...${NC}"
+    echo
+    local register_output=$(run_rocketpool -f "$max_fee" -i "$max_priority_fee" node register 2>&1)
     local register_status=$?
     
     # 检查输出中是否包含错误
@@ -698,23 +736,61 @@ create_minipool() {
     wait_for_sync   # ← 新增：强制等到双 100%
     
     echo -e "${GREEN}✓ 同步完成！开始创建 Minipool${NC}"
-    echo -e "${CYAN}推荐命令（Hoodi 测试网 RPL 抵押已关闭，最划算）：${NC}"
-    echo -e "${YELLOW}rocketpool minipool deposit 8 eth${NC}"
-    echo -e "${CYAN}（你出 8 ETH，协议借你 8 ETH → 16 ETH Minipool，性价比最高）${NC}"
-    read -p "按回车直接执行（或 Ctrl+C 取消）... " confirm
+    echo
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}创建 Minipool 过程说明${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}接下来系统会询问多个确认：${NC}"
+    echo -e "${CYAN}  1. 关于 Saturn 0 的说明（选择 y 继续）${NC}"
+    echo -e "${CYAN}  2. 是否加入 Smoothing Pool（可选，建议 y）${NC}"
+    echo -e "${CYAN}  3. 关于 Fee Distributor 的说明（选择 y 继续）${NC}"
+    echo -e "${CYAN}  4. 确认 8 ETH 存款（选择 y 继续）${NC}"
+    echo -e "${CYAN}  5. 确认 Commission Rate（5%）和 Credit Balance（选择 y 继续）${NC}"
+    echo -e "${CYAN}  6. 选择 Gas 费用（建议选择 4 gwei，直接按回车）${NC}"
+    echo -e "${CYAN}  7. 最终确认（选择 y 确认）${NC}"
+    echo
+    echo -e "${YELLOW}重要提示：${NC}"
+    echo -e "${RED}  • 创建后需要等待 256 epochs（约 27 小时）才能退出${NC}"
+    echo -e "${RED}  • 请确保钱包有足够的 ETH（至少 8 ETH + Gas 费用）${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    read -p "准备好后，按回车键开始创建 Minipool（或 Ctrl+C 取消）... " confirm
     
     echo
-    echo -e "${YELLOW}正在创建 Minipool...${NC}"
-    local deposit_output=$(run_rocketpool minipool deposit 8 eth 2>&1)
+    echo -e "${YELLOW}正在创建 Minipool（8 ETH）...${NC}"
+    echo -e "${CYAN}请按照提示回答相关问题...${NC}"
+    echo
+    local deposit_output=$(run_rocketpool node deposit 2>&1)
     local deposit_status=$?
     
+    echo
     echo "$deposit_output"
     echo
     
     # 检查输出中是否包含成功信息
-    if echo "$deposit_output" | grep -qi "successfully created\|minipool.*created"; then
+    if echo "$deposit_output" | grep -qi "successfully\|was made successfully\|minipool.*address\|validator pubkey\|minipool is now"; then
         echo -e "${GREEN}🎉 Minipool 创建成功！你的节点正式上线！${NC}"
-        echo -e "${YELLOW}提示：状态会从 Initialized → Prelaunch → Staking，约 5–15 分钟生效${NC}"
+        echo
+        # 提取关键信息
+        local minipool_addr=$(echo "$deposit_output" | grep -i "minipool.*address" | grep -o "0x[a-fA-F0-9]\{40\}" | head -1)
+        local validator_pubkey=$(echo "$deposit_output" | grep -i "validator pubkey" | grep -o "[a-fA-F0-9]\{96\}" | head -1)
+        
+        if [ -n "$minipool_addr" ]; then
+            echo -e "${CYAN}Minipool 地址: $minipool_addr${NC}"
+        fi
+        if [ -n "$validator_pubkey" ]; then
+            echo -e "${CYAN}Validator 公钥: $validator_pubkey${NC}"
+            echo -e "${YELLOW}（可用于 mev-commit 注册）${NC}"
+        fi
+        echo
+        echo -e "${YELLOW}状态变化：${NC}"
+        echo -e "${CYAN}  • Initialized（已初始化）${NC}"
+        echo -e "${CYAN}  • Prelaunch（预启动，等待剩余 ETH 分配）${NC}"
+        echo -e "${CYAN}  • Staking（质押中，约 12 小时后生效）${NC}"
+        echo
+        echo -e "${GREEN}可以使用以下命令监控进度：${NC}"
+        echo -e "${CYAN}  rocketpool service logs node${NC}"
+        echo -e "${CYAN}  rocketpool minipool status${NC}"
     elif echo "$deposit_output" | grep -qi "error\|not ready\|syncing\|failed"; then
         echo -e "${RED}✗ Minipool 创建失败${NC}"
         echo -e "${YELLOW}常见原因：余额不足 / 还没到 100% 同步${NC}"
