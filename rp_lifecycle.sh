@@ -574,10 +574,17 @@ register_node() {
                     press_any_key
                     return
                 fi
+            else
+                echo -e "${GREEN}✓ 区块链同步状态检查完成${NC}"
             fi
+        else
+            echo -e "${GREEN}✓ 跳过同步检查，直接进行注册${NC}"
         fi
     fi
     
+    echo
+    echo -e "${YELLOW}正在注册节点到 Rocket Pool 网络...${NC}"
+    echo -e "${CYAN}这可能需要一些时间，请稍候...${NC}"
     echo
     local register_output=$(run_rocketpool node register 2>&1)
     local register_status=$?
