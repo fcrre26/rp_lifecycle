@@ -89,6 +89,7 @@ show_menu() {
     echo "11. 查看当前钱包状态"
     echo "12. 查看 Minipool 状态和 BLS 公钥"
     echo "13. 检查区块链同步状态"
+    echo "18. 网络诊断（检查连接和同步问题）"
     echo
     echo -e "${BLUE}=== 服务管理 ===${NC}"
     echo "14. 重启所有服务"
@@ -942,6 +943,144 @@ clean_wallet_data() {
     press_any_key
 }
 
+# 网络诊断
+network_diagnosis() {
+    echo -e "${YELLOW}[18] 网络诊断（检查连接和同步问题）...${NC}"
+    
+    if ! check_rocketpool_installed; then
+        echo -e "${RED}✗ 请先安装 Rocket Pool！${NC}"
+        press_any_key
+        return
+    fi
+    
+    if ! check_root_user; then
+        press_any_key
+        return
+    fi
+    
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}网络诊断工具${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    
+    # 1. 检查基本网络连接
+    echo -e "${YELLOW}[1] 检查基本网络连接...${NC}"
+    if ping -c 2 8.8.8.8 &> /dev/null; then
+        echo -e "${GREEN}✓ 基本网络连接正常（可以访问互联网）${NC}"
+    else
+        echo -e "${RED}✗ 基本网络连接失败（无法访问互联网）${NC}"
+        echo -e "${YELLOW}  这可能是导致同步问题的根本原因${NC}"
+    fi
+    echo
+    
+    # 2. 检查 DNS 解析
+    echo -e "${YELLOW}[2] 检查 DNS 解析...${NC}"
+    if nslookup github.com &> /dev/null; then
+        echo -e "${GREEN}✓ DNS 解析正常${NC}"
+    else
+        echo -e "${RED}✗ DNS 解析失败${NC}"
+        echo -e "${YELLOW}  可能影响连接到区块链节点${NC}"
+    fi
+    echo
+    
+    # 3. 检查 Rocket Pool 服务状态
+    echo -e "${YELLOW}[3] 检查 Rocket Pool 服务状态...${NC}"
+    local service_status=$(run_rocketpool service status 2>&1)
+    if echo "$service_status" | grep -qi "running\|active"; then
+        echo -e "${GREEN}✓ Rocket Pool 服务正在运行${NC}"
+    else
+        echo -e "${RED}✗ Rocket Pool 服务未运行或异常${NC}"
+        echo -e "${YELLOW}  建议：使用选项 14 重启服务${NC}"
+    fi
+    echo
+    
+    # 4. 检查区块链同步状态
+    echo -e "${YELLOW}[4] 检查区块链同步状态...${NC}"
+    local sync_output=$(run_rocketpool node sync 2>&1)
+    
+    # 检查执行层（EC）状态
+    if echo "$sync_output" | grep -qi "EC.*synced.*ready"; then
+        echo -e "${GREEN}✓ 执行层（EC）已同步并就绪${NC}"
+    elif echo "$sync_output" | grep -qi "EC.*syncing"; then
+        local ec_progress=$(echo "$sync_output" | grep -i "EC" | grep -o "[0-9.]*%" | head -1)
+        echo -e "${YELLOW}⚠️  执行层（EC）正在同步中: $ec_progress${NC}"
+    else
+        echo -e "${RED}✗ 执行层（EC）状态异常${NC}"
+    fi
+    
+    # 检查共识层（CC）状态
+    if echo "$sync_output" | grep -qi "CC.*synced.*ready"; then
+        echo -e "${GREEN}✓ 共识层（CC）已同步并就绪${NC}"
+    elif echo "$sync_output" | grep -qi "CC.*syncing"; then
+        local cc_progress=$(echo "$sync_output" | grep -i "CC" | grep -o "[0-9.]*%" | head -1)
+        echo -e "${RED}⚠️  共识层（CC）正在同步中: $cc_progress${NC}"
+        if echo "$cc_progress" | grep -q "99"; then
+            echo -e "${YELLOW}  注意：即使显示 99.99%，也需要等待到 100% 才能进行操作${NC}"
+        fi
+    else
+        echo -e "${RED}✗ 共识层（CC）状态异常${NC}"
+    fi
+    echo
+    
+    # 5. 检查对等节点连接
+    echo -e "${YELLOW}[5] 检查对等节点连接...${NC}"
+    local peers_info=$(run_rocketpool node sync 2>&1 | grep -i "peer\|connection" | head -5)
+    if [ -n "$peers_info" ]; then
+        echo -e "${CYAN}对等节点信息：${NC}"
+        echo "$peers_info"
+    else
+        echo -e "${YELLOW}⚠️  无法获取对等节点信息${NC}"
+        echo -e "${YELLOW}  如果对等节点数量为 0，可能是网络问题${NC}"
+    fi
+    echo
+    
+    # 6. 检查常见网络问题
+    echo -e "${YELLOW}[6] 常见网络问题排查...${NC}"
+    echo -e "${CYAN}可能的问题和解决方案：${NC}"
+    echo
+    echo -e "${GREEN}问题 1：防火墙阻止连接${NC}"
+    echo -e "${YELLOW}  解决：检查防火墙设置，确保允许 Rocket Pool 客户端端口${NC}"
+    echo -e "${YELLOW}  执行层端口：通常为 30303（TCP/UDP）${NC}"
+    echo -e "${YELLOW}  共识层端口：通常为 9000（TCP/UDP）${NC}"
+    echo
+    echo -e "${GREEN}问题 2：网络带宽不足${NC}"
+    echo -e "${YELLOW}  解决：区块链同步需要稳定的网络连接${NC}"
+    echo -e "${YELLOW}  建议：确保有足够的带宽（至少 10 Mbps）${NC}"
+    echo
+    echo -e "${GREEN}问题 3：NAT/路由器配置${NC}"
+    echo -e "${YELLOW}  解决：如果使用 NAT，可能需要配置端口转发${NC}"
+    echo -e "${YELLOW}  或者使用 UPnP 自动配置${NC}"
+    echo
+    echo -e "${GREEN}问题 4：ISP 限制或网络不稳定${NC}"
+    echo -e "${YELLOW}  解决：检查网络稳定性，考虑使用 VPN 或更换网络${NC}"
+    echo
+    echo -e "${GREEN}问题 5：同步卡在 99.99%${NC}"
+    echo -e "${YELLOW}  解决：这是正常现象，需要等待完全同步到 100%${NC}"
+    echo -e "${YELLOW}  可以使用选项 13 持续监控同步状态${NC}"
+    echo
+    
+    # 7. 提供建议操作
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}建议操作：${NC}"
+    echo -e "${YELLOW}1. 如果网络连接正常但同步缓慢：${NC}"
+    echo -e "${CYAN}   • 等待同步完成（可能需要数小时到数天）${NC}"
+    echo -e "${CYAN}   • 使用选项 13 持续监控同步状态${NC}"
+    echo -e "${CYAN}   • 确保网络连接稳定${NC}"
+    echo
+    echo -e "${YELLOW}2. 如果网络连接异常：${NC}"
+    echo -e "${CYAN}   • 检查网络配置和防火墙设置${NC}"
+    echo -e "${CYAN}   • 重启网络服务或路由器${NC}"
+    echo -e "${CYAN}   • 联系网络管理员或 ISP${NC}"
+    echo
+    echo -e "${YELLOW}3. 如果服务异常：${NC}"
+    echo -e "${CYAN}   • 使用选项 14 重启所有服务${NC}"
+    echo -e "${CYAN}   • 使用选项 15 查看服务日志${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    
+    press_any_key
+}
+
 # 主循环
 main() {
     # 检查是否以 root 用户运行
@@ -964,7 +1103,7 @@ main() {
     while true; do
         show_banner
         show_menu
-        read -p "请选择操作 [0-17]: " choice
+        read -p "请选择操作 [0-18]: " choice
         
         case $choice in
             1) install_rocketpool ;;
@@ -984,6 +1123,7 @@ main() {
             15) view_logs ;;
             16) exit_minipool ;;
             17) clean_wallet_data ;;
+            18) network_diagnosis ;;
             0) 
                 echo -e "${GREEN}感谢使用 Rocket Pool 多钱包测试管理器！再见！${NC}"
                 exit 0
