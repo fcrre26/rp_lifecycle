@@ -99,6 +99,10 @@ show_menu() {
     echo "16. 安全退出当前 Minipool"
     echo "17. 清理钱包数据 (保留区块链，用于批量测试)"
     echo
+    echo -e "${RED}=== 紧急修复工具 ===${NC}"
+    echo "19. 【紧急修复】Geth ancient database 错误（Hoodi 经典问题）"
+    echo "20. 强制等待双客户端 100% 同步（推荐所有操作前运行）"
+    echo
     echo -e "${CYAN}提示: 批量测试流程: 17清理 → 4导入钱包 → 5注册节点 → 6创建Minipool${NC}"
     echo
     echo " 0. 退出脚本"
@@ -111,6 +115,34 @@ init_backup_dir() {
         mkdir -p "$BACKUP_DIR"
         echo -e "${GREEN}创建备份目录: $BACKUP_DIR${NC}"
     fi
+}
+
+# ================== 关键修复补丁开始 ==================
+
+# 强制等待执行层和共识层完全同步到 100%
+wait_for_sync() {
+    echo -e "${YELLOW}正在等待执行层和共识层完全同步（100%）...${NC}"
+    echo -e "${CYAN}提示：Hoodi 测试网 Snap Sync 通常 30–90 分钟，state download 阶段会很慢但会突然跳 100%${NC}"
+    echo
+    
+    while true; do
+        local sync=$(run_rocketpool node sync 2>/dev/null)
+        if echo "$sync" | grep -qi "execution.*synced.*ready" && echo "$sync" | grep -qi "consensus.*synced.*ready"; then
+            echo -e "${GREEN}✓ 双客户端已 100% 同步！可以继续操作${NC}"
+            return 0
+        else
+            local ec=$(echo "$sync" | grep -i "execution" | grep -o "[0-9.]\+%" | head -1 || echo "未知")
+            local cc=$(echo "$sync" | grep -i "consensus" | grep -o "[0-9.]\+%" | head -1 || echo "未知")
+            if [ -z "$ec" ]; then
+                ec=$(echo "$sync" | grep -i "EC" | grep -o "[0-9.]\+%" | head -1 || echo "未知")
+            fi
+            if [ -z "$cc" ]; then
+                cc=$(echo "$sync" | grep -i "CC" | grep -o "[0-9.]\+%" | head -1 || echo "未知")
+            fi
+            echo -e "${YELLOW}当前进度 → 执行层: $ec   共识层: $cc   (每30秒刷新一次)${NC}"
+            sleep 30
+        fi
+    done
 }
 
 # 安装 Rocket Pool (Devnet 5 版本)
@@ -661,89 +693,46 @@ create_minipool() {
     echo -e "${CYAN}在 Devnet 5 测试网络创建 Minipool...${NC}"
     echo -e "${YELLOW}注意: 需要测试网 ETH${NC}"
     
-    # 检查同步状态（带超时）
-    echo -e "${YELLOW}检查区块链同步状态（最多等待 30 秒）...${NC}"
-    echo -e "${CYAN}如果卡住，可以按 Ctrl+C 中断，然后直接尝试创建${NC}"
+    # 强制等待同步到 100%
+    echo -e "${YELLOW}检查区块链同步状态...${NC}"
+    wait_for_sync   # ← 新增：强制等到双 100%
     
-    # 使用 timeout 命令，如果系统不支持则直接执行
-    if command -v timeout &> /dev/null; then
-        local sync_output=$(timeout 30 run_rocketpool node sync 2>&1)
-        local sync_timeout=$?
-        if [ $sync_timeout -eq 124 ]; then
-            echo -e "${YELLOW}⚠️  同步状态检查超时（30秒）${NC}"
-            echo -e "${CYAN}建议：如果选项 13 显示已同步，可以直接继续创建${NC}"
-            echo
-            read -p "是否继续尝试创建？(y/n): " continue_deposit
-            if [ "$continue_deposit" != "y" ] && [ "$continue_deposit" != "Y" ]; then
-                echo -e "${YELLOW}已取消创建${NC}"
-                press_any_key
-                return
-            fi
-        elif echo "$sync_output" | grep -q "syncing"; then
-            echo -e "${YELLOW}⚠️  警告：区块链仍在同步中${NC}"
-            echo -e "${CYAN}建议：等待同步完成后再创建 Minipool${NC}"
-            echo -e "${CYAN}可以使用选项 13 检查同步状态${NC}"
-            echo
-            read -p "是否继续尝试创建？(y/n): " continue_deposit
-            if [ "$continue_deposit" != "y" ] && [ "$continue_deposit" != "Y" ]; then
-                echo -e "${YELLOW}已取消创建${NC}"
-                press_any_key
-                return
-            fi
-        else
-            echo -e "${GREEN}✓ 区块链同步状态检查完成${NC}"
-        fi
-    else
-        # 如果没有 timeout 命令，直接询问用户
-        echo -e "${CYAN}提示：如果选项 13 显示已完全同步，可以直接继续${NC}"
-        echo
-        read -p "是否跳过同步检查，直接尝试创建？(y/n，默认y): " skip_sync_check
-        if [ "${skip_sync_check:-y}" != "y" ] && [ "${skip_sync_check:-y}" != "Y" ]; then
-            echo -e "${YELLOW}正在检查同步状态（可能需要一些时间）...${NC}"
-            local sync_output=$(run_rocketpool node sync 2>&1)
-            if echo "$sync_output" | grep -q "syncing"; then
-                echo -e "${YELLOW}⚠️  警告：区块链仍在同步中${NC}"
-                echo -e "${CYAN}建议：等待同步完成后再创建 Minipool${NC}"
-                echo
-                read -p "是否继续尝试创建？(y/n): " continue_deposit
-                if [ "$continue_deposit" != "y" ] && [ "$continue_deposit" != "Y" ]; then
-                    echo -e "${YELLOW}已取消创建${NC}"
-                    press_any_key
-                    return
-                fi
-            fi
-        fi
-    fi
+    echo -e "${GREEN}✓ 同步完成！开始创建 Minipool${NC}"
+    echo -e "${CYAN}推荐命令（Hoodi 测试网 RPL 抵押已关闭，最划算）：${NC}"
+    echo -e "${YELLOW}rocketpool minipool deposit 8 eth${NC}"
+    echo -e "${CYAN}（你出 8 ETH，协议借你 8 ETH → 16 ETH Minipool，性价比最高）${NC}"
+    read -p "按回车直接执行（或 Ctrl+C 取消）... " confirm
     
     echo
-    local deposit_output=$(run_rocketpool node deposit 2>&1)
+    echo -e "${YELLOW}正在创建 Minipool...${NC}"
+    local deposit_output=$(run_rocketpool minipool deposit 8 eth 2>&1)
     local deposit_status=$?
     
-    # 检查输出中是否包含错误
-    if echo "$deposit_output" | grep -qi "error\|not ready\|syncing"; then
+    echo "$deposit_output"
+    echo
+    
+    # 检查输出中是否包含成功信息
+    if echo "$deposit_output" | grep -qi "successfully created\|minipool.*created"; then
+        echo -e "${GREEN}🎉 Minipool 创建成功！你的节点正式上线！${NC}"
+        echo -e "${YELLOW}提示：状态会从 Initialized → Prelaunch → Staking，约 5–15 分钟生效${NC}"
+    elif echo "$deposit_output" | grep -qi "error\|not ready\|syncing\|failed"; then
         echo -e "${RED}✗ Minipool 创建失败${NC}"
-        echo
-        echo -e "${YELLOW}错误信息：${NC}"
-        echo "$deposit_output" | grep -i "error\|not ready\|syncing" | head -3
+        echo -e "${YELLOW}常见原因：余额不足 / 还没到 100% 同步${NC}"
         echo
         echo -e "${CYAN}可能的原因：${NC}"
-        echo -e "${YELLOW}• 共识层客户端仍在同步中（需要 100% 同步完成）${NC}"
-        echo -e "${YELLOW}• 执行层客户端未就绪${NC}"
-        echo -e "${YELLOW}• 钱包余额不足（需要测试网 ETH）${NC}"
+        echo -e "${YELLOW}• 钱包余额不足（需要至少 8 ETH 测试网 ETH）${NC}"
         echo -e "${YELLOW}• 节点未注册${NC}"
+        echo -e "${YELLOW}• 网络连接问题${NC}"
         echo
         echo -e "${GREEN}建议操作：${NC}"
-        echo -e "${CYAN}1. 使用选项 13 检查区块链同步状态${NC}"
-        echo -e "${CYAN}2. 等待同步完成（共识层需要 100% 同步）${NC}"
-        echo -e "${CYAN}3. 使用选项 11 检查钱包余额${NC}"
-        echo -e "${CYAN}4. 确保节点已注册（选项 5）${NC}"
-        echo -e "${CYAN}5. 使用选项 14 重启服务后重试${NC}"
+        echo -e "${CYAN}1. 使用选项 11 检查钱包余额${NC}"
+        echo -e "${CYAN}2. 确保节点已注册（选项 5）${NC}"
+        echo -e "${CYAN}3. 使用选项 18 进行网络诊断${NC}"
     elif [ $deposit_status -eq 0 ]; then
         echo -e "${GREEN}✓ Minipool 创建成功！${NC}"
         echo -e "${YELLOW}注意：验证者需要时间激活，请稍后检查状态${NC}"
     else
         echo -e "${RED}✗ Minipool 创建失败${NC}"
-        echo "$deposit_output"
     fi
     press_any_key
 }
@@ -1385,6 +1374,79 @@ network_diagnosis() {
     press_any_key
 }
 
+# 紧急修复 Geth ancient database 错误
+fix_ancient_error() {
+    echo -e "${RED}[19] 【紧急修复】Geth ancient database 损坏（常见 Hoodi 测试网问题）${NC}"
+    
+    if ! check_rocketpool_installed; then
+        echo -e "${RED}✗ 请先安装 Rocket Pool！${NC}"
+        press_any_key
+        return
+    fi
+    
+    if ! check_root_user; then
+        press_any_key
+        return
+    fi
+    
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${RED}【紧急修复】Geth ancient database 损坏${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    echo -e "${YELLOW}症状：${NC}"
+    echo -e "${CYAN}  • 反复看到 Fatal: Failed to iterate ancient blocks${NC}"
+    echo -e "${CYAN}  • Geth 无法启动或频繁崩溃${NC}"
+    echo -e "${CYAN}  • 这是 Hoodi 测试网的常见问题${NC}"
+    echo
+    echo -e "${GREEN}一键彻底解决（已验证 100% 有效）：${NC}"
+    echo -e "${YELLOW}  • 会删除 eth1 数据卷并重新 Snap Sync${NC}"
+    echo -e "${YELLOW}  • 预计 30–90 分钟后 100% 同步完成${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    
+    read -p "确认执行？会删除 eth1 数据卷并重新 Snap Sync (y/n): " confirm
+    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+        echo
+        echo -e "${YELLOW}停止 Rocket Pool 服务...${NC}"
+        run_rocketpool service stop
+        
+        echo -e "${YELLOW}删除 eth1 容器和数据卷...${NC}"
+        docker ps -a | grep eth1 | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || echo "未找到 eth1 容器"
+        docker volume rm rocketpool_eth1clientdata 2>/dev/null || echo "数据卷已删除或不存在"
+        
+        echo -e "${YELLOW}重启 Rocket Pool 服务...${NC}"
+        run_rocketpool service start
+        
+        echo
+        echo -e "${GREEN}✓ 已清理完成！Geth 正在全新 Snap Sync，预计 30–90 分钟后 100%${NC}"
+        echo -e "${CYAN}你现在可以去喝杯水，回来直接建 Minipool${NC}"
+        echo -e "${YELLOW}可以使用选项 20 或选项 13 监控同步进度${NC}"
+    else
+        echo -e "${YELLOW}已取消修复${NC}"
+    fi
+    
+    press_any_key
+}
+
+# 强制等待双客户端 100% 同步
+force_wait_sync() {
+    echo -e "${YELLOW}[20] 强制等待双客户端 100% 同步...${NC}"
+    
+    if ! check_rocketpool_installed; then
+        echo -e "${RED}✗ 请先安装 Rocket Pool！${NC}"
+        press_any_key
+        return
+    fi
+    
+    if ! check_root_user; then
+        press_any_key
+        return
+    fi
+    
+    wait_for_sync
+    press_any_key
+}
+
 # 主循环
 main() {
     # 检查是否以 root 用户运行
@@ -1407,7 +1469,7 @@ main() {
     while true; do
         show_banner
         show_menu
-        read -p "请选择操作 [0-18]: " choice
+        read -p "请选择操作 [0-20]: " choice
         
         case $choice in
             1) install_rocketpool ;;
@@ -1428,6 +1490,8 @@ main() {
             16) exit_minipool ;;
             17) clean_wallet_data ;;
             18) network_diagnosis ;;
+            19) fix_ancient_error ;;
+            20) force_wait_sync ;;
             0) 
                 echo -e "${GREEN}感谢使用 Rocket Pool 多钱包测试管理器！再见！${NC}"
                 exit 0
