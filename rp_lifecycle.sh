@@ -491,6 +491,37 @@ register_node() {
         return
     fi
     
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}Rocket Pool 架构说明${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    echo -e "${YELLOW}节点（Node）和 Minipool 的区别：${NC}"
+    echo
+    echo -e "${GREEN}1. 节点注册（Node Registration）${NC}"
+    echo -e "${CYAN}   • 这是第一步：将您的服务器注册到 Rocket Pool 网络${NC}"
+    echo -e "${CYAN}   • 注册后，您的服务器成为 Rocket Pool 网络的一部分${NC}"
+    echo -e "${CYAN}   • 但此时还没有开始验证，只是注册了基础设施${NC}"
+    echo
+    echo -e "${GREEN}2. Minipool 创建（Minipool Creation）${NC}"
+    echo -e "${CYAN}   • 这是第二步：创建实际的验证者实例${NC}"
+    echo -e "${CYAN}   • Minipool = 一个验证者池，需要质押 ETH 才能创建${NC}"
+    echo -e "${CYAN}   • 每个 Minipool 需要 8 ETH（或 16 ETH）来启动验证${NC}"
+    echo -e "${CYAN}   • 创建 Minipool 后，验证者才会开始工作并赚取奖励${NC}"
+    echo
+    echo -e "${YELLOW}简单理解：${NC}"
+    echo -e "${CYAN}  • 节点注册 = 注册您的服务器（基础设施）${NC}"
+    echo -e "${CYAN}  • Minipool = 创建验证者（实际工作）${NC}"
+    echo -e "${CYAN}  • 一个节点可以创建多个 Minipool（如果您有足够的 ETH）${NC}"
+    echo
+    echo -e "${YELLOW}注意：${NC}"
+    echo -e "${RED}  • Rocket Pool 就是基于 Minipool 架构的${NC}"
+    echo -e "${RED}  • 如果您不想使用 Minipool，可能需要考虑其他质押方案${NC}"
+    echo -e "${RED}  • 但 Rocket Pool 的优势就是通过 Minipool 降低质押门槛${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    
+    read -p "了解后，按回车键继续注册节点... " confirm
+    
     echo -e "${CYAN}在 Devnet 5 测试网络注册节点...${NC}"
     
     # 检查同步状态
@@ -552,6 +583,35 @@ create_minipool() {
         press_any_key
         return
     fi
+    
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}Minipool 说明${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    echo -e "${YELLOW}什么是 Minipool？${NC}"
+    echo -e "${CYAN}  • Minipool 是 Rocket Pool 的核心概念${NC}"
+    echo -e "${CYAN}  • 它代表一个验证者实例，用于参与以太坊质押${NC}"
+    echo -e "${CYAN}  • 每个 Minipool 需要质押 ETH 才能创建${NC}"
+    echo
+    echo -e "${YELLOW}为什么需要 Minipool？${NC}"
+    echo -e "${CYAN}  • 单独质押需要 32 ETH，门槛很高${NC}"
+    echo -e "${CYAN}  • Rocket Pool 通过 Minipool 降低门槛：只需 8 ETH 或 16 ETH${NC}"
+    echo -e "${CYAN}  • 剩余的 ETH 由 Rocket Pool 协议提供${NC}"
+    echo -e "${CYAN}  • 这样更多人可以用更少的 ETH 参与质押${NC}"
+    echo
+    echo -e "${YELLOW}Minipool 类型：${NC}"
+    echo -e "${GREEN}  • 8 ETH Minipool：${NC} 您提供 8 ETH，协议提供 24 ETH"
+    echo -e "${GREEN}  • 16 ETH Minipool：${NC} 您提供 16 ETH，协议提供 16 ETH"
+    echo
+    echo -e "${YELLOW}重要：${NC}"
+    echo -e "${RED}  • Rocket Pool 就是基于 Minipool 架构的，无法避免${NC}"
+    echo -e "${RED}  • 如果您不想使用 Minipool，需要选择其他质押方案：${NC}"
+    echo -e "${CYAN}    - 单独质押（Solo Staking）：需要 32 ETH，自己运行验证者${NC}"
+    echo -e "${CYAN}    - 其他质押池：如 Lido、Stakewise 等${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    
+    read -p "了解后，按回车键继续创建 Minipool... " confirm
     
     echo -e "${CYAN}在 Devnet 5 测试网络创建 Minipool...${NC}"
     echo -e "${YELLOW}注意: 需要测试网 ETH${NC}"
@@ -756,7 +816,52 @@ check_wallet_status() {
         return
     fi
     
-    run_rocketpool wallet status
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}钱包和节点状态${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    
+    # 检查钱包状态
+    local wallet_output=$(run_rocketpool wallet status 2>&1)
+    echo "$wallet_output"
+    echo
+    
+    # 检查节点是否注册
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}检查节点注册状态...${NC}"
+    local node_status=$(run_rocketpool node status 2>&1)
+    
+    # 首先检查错误信息
+    if echo "$node_status" | grep -qi "error\|not registered\|could not\|failed\|unable"; then
+        echo -e "${RED}✗ 节点未注册${NC}"
+        echo
+        if echo "$node_status" | grep -qi "not registered"; then
+            echo -e "${YELLOW}错误信息：${NC}"
+            echo "$node_status" | grep -i "not registered" | head -2
+            echo
+            echo -e "${CYAN}说明：${NC}"
+            echo -e "${YELLOW}  • 节点尚未注册到 Rocket Pool 网络${NC}"
+            echo -e "${YELLOW}  • 之前的注册操作可能未成功${NC}"
+            echo -e "${YELLOW}  • 可能原因：区块链未完全同步（需要 100% 同步）${NC}"
+            echo
+            echo -e "${GREEN}建议操作：${NC}"
+            echo -e "${CYAN}1. 使用选项 13 检查区块链同步状态${NC}"
+            echo -e "${CYAN}2. 等待同步到 100% 后，使用选项 5 注册节点${NC}"
+            echo -e "${CYAN}3. 使用选项 18 进行网络诊断${NC}"
+        else
+            echo -e "${YELLOW}无法获取节点状态${NC}"
+            echo "$node_status" | head -5
+        fi
+    elif echo "$node_status" | grep -qi "registered\|node.*registered\|registration"; then
+        echo -e "${GREEN}✓ 节点已成功注册到 Rocket Pool 网络${NC}"
+        echo -e "${CYAN}节点注册信息：${NC}"
+        echo "$node_status" | grep -i "registered\|node" | head -3
+    else
+        echo -e "${YELLOW}⚠️  无法确定节点注册状态${NC}"
+        echo -e "${CYAN}节点状态信息：${NC}"
+        echo "$node_status" | head -10
+    fi
+    
     press_any_key
 }
 
@@ -769,11 +874,75 @@ check_minipool_and_bls() {
         return
     fi
     
-    echo -e "${CYAN}=== Minipool 状态 ===${NC}"
-    run_rocketpool minipool status
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}Minipool 状态检查${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
     echo
-    echo -e "${GREEN}=== BLS 公钥 (用于 mev-commit 注册) ===${NC}"
-    run_rocketpool minipool status | grep -A 1 "Validator pubkey"
+    
+    local minipool_output=$(run_rocketpool minipool status 2>&1)
+    
+    # 首先检查是否有错误信息
+    if echo "$minipool_output" | grep -qi "error\|not registered\|could not\|failed\|unable"; then
+        echo -e "${RED}✗ Minipool 查询失败${NC}"
+        echo
+        echo -e "${YELLOW}错误信息：${NC}"
+        echo "$minipool_output" | grep -i "error\|not registered\|could not\|failed" | head -3
+        echo
+        
+        # 检查具体错误类型
+        if echo "$minipool_output" | grep -qi "not registered"; then
+            echo -e "${RED}问题：节点未注册${NC}"
+            echo -e "${YELLOW}  说明：之前的注册操作可能未成功${NC}"
+            echo -e "${YELLOW}  可能原因：${NC}"
+            echo -e "${CYAN}    • 区块链未完全同步（需要 100% 同步）${NC}"
+            echo -e "${CYAN}    • 网络连接问题导致注册失败${NC}"
+            echo -e "${CYAN}    • 服务未就绪${NC}"
+            echo
+            echo -e "${GREEN}建议操作：${NC}"
+            echo -e "${CYAN}1. 使用选项 13 检查区块链同步状态${NC}"
+            echo -e "${CYAN}2. 等待同步到 100% 后，使用选项 5 重新注册节点${NC}"
+            echo -e "${CYAN}3. 使用选项 18 进行网络诊断${NC}"
+        else
+            echo -e "${YELLOW}  说明：无法查询 Minipool 状态${NC}"
+            echo -e "${YELLOW}  可能原因：${NC}"
+            echo -e "${CYAN}    • 节点未注册${NC}"
+            echo -e "${CYAN}    • 服务异常${NC}"
+            echo -e "${CYAN}    • 网络连接问题${NC}"
+            echo
+            echo -e "${GREEN}建议操作：${NC}"
+            echo -e "${CYAN}1. 使用选项 11 检查节点注册状态${NC}"
+            echo -e "${CYAN}2. 使用选项 14 重启服务${NC}"
+            echo -e "${CYAN}3. 使用选项 18 进行网络诊断${NC}"
+        fi
+    # 检查是否有 Minipool
+    elif echo "$minipool_output" | grep -qi "no minipools\|0 minipools"; then
+        echo -e "${RED}✗ 未找到任何 Minipool${NC}"
+        echo -e "${YELLOW}  说明：之前的创建操作可能未成功${NC}"
+        echo -e "${YELLOW}  可能原因：${NC}"
+        echo -e "${CYAN}    • 区块链未完全同步（需要 100% 同步）${NC}"
+        echo -e "${CYAN}    • 钱包余额不足${NC}"
+        echo -e "${CYAN}    • 节点未注册${NC}"
+        echo -e "${CYAN}    • 网络连接问题${NC}"
+        echo
+        echo -e "${GREEN}建议操作：${NC}"
+        echo -e "${CYAN}1. 使用选项 13 检查区块链同步状态${NC}"
+        echo -e "${CYAN}2. 使用选项 11 检查钱包余额和节点注册状态${NC}"
+        echo -e "${CYAN}3. 使用选项 18 进行网络诊断${NC}"
+        echo -e "${CYAN}4. 等待同步完成后，使用选项 6 重新创建 Minipool${NC}"
+    elif echo "$minipool_output" | grep -qi "minipool.*status\|validator.*pubkey\|minipool address"; then
+        echo -e "${GREEN}✓ 找到 Minipool，创建成功！${NC}"
+        echo
+        echo -e "${CYAN}=== Minipool 详细信息 ===${NC}"
+        echo "$minipool_output"
+        echo
+        echo -e "${GREEN}=== BLS 公钥 (用于 mev-commit 注册) ===${NC}"
+        echo "$minipool_output" | grep -A 1 -i "validator pubkey\|bls pubkey" || echo -e "${YELLOW}未找到 BLS 公钥信息${NC}"
+    else
+        echo -e "${YELLOW}⚠️  无法确定 Minipool 状态${NC}"
+        echo -e "${CYAN}原始输出：${NC}"
+        echo "$minipool_output"
+    fi
+    
     press_any_key
 }
 
@@ -1075,6 +1244,58 @@ network_diagnosis() {
     echo -e "${YELLOW}3. 如果服务异常：${NC}"
     echo -e "${CYAN}   • 使用选项 14 重启所有服务${NC}"
     echo -e "${CYAN}   • 使用选项 15 查看服务日志${NC}"
+    echo
+    
+    # 8. 判断是否需要换 VPS
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}是否需要换 VPS？${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+    echo
+    
+    local need_change_vps=false
+    local reasons=""
+    
+    # 检查基本网络
+    if ! ping -c 2 8.8.8.8 &> /dev/null; then
+        need_change_vps=true
+        reasons="${reasons}• 基本网络连接失败（无法访问互联网）\n"
+    fi
+    
+    # 检查 DNS
+    if ! nslookup github.com &> /dev/null; then
+        need_change_vps=true
+        reasons="${reasons}• DNS 解析失败\n"
+    fi
+    
+    # 检查同步状态（如果长期卡住）
+    if echo "$sync_output" | grep -qi "CC.*syncing.*99"; then
+        local cc_sync_time=$(find "$DATA_DIR/eth2" -type f -name "*.log" -mtime +7 2>/dev/null | wc -l)
+        if [ "$cc_sync_time" -gt 0 ]; then
+            echo -e "${YELLOW}⚠️  共识层同步已持续多天，可能是网络问题${NC}"
+        fi
+    fi
+    
+    if [ "$need_change_vps" = true ]; then
+        echo -e "${RED}建议：考虑更换 VPS${NC}"
+        echo -e "${YELLOW}原因：${NC}"
+        echo -e "$reasons"
+        echo -e "${CYAN}推荐 VPS 提供商：${NC}"
+        echo -e "${YELLOW}  • 选择网络稳定、带宽充足的 VPS${NC}"
+        echo -e "${YELLOW}  • 建议选择靠近区块链节点的地理位置${NC}"
+        echo -e "${YELLOW}  • 确保 VPS 提供商不限制 P2P 连接${NC}"
+    else
+        echo -e "${GREEN}当前 VPS 网络连接正常${NC}"
+        echo -e "${CYAN}如果同步仍然缓慢，可能的原因：${NC}"
+        echo -e "${YELLOW}  • 这是首次同步，需要下载整个区块链（正常需要数小时到数天）${NC}"
+        echo -e "${YELLOW}  • 网络带宽较小，同步速度较慢（但最终会完成）${NC}"
+        echo -e "${YELLOW}  • 对等节点连接较少（可以等待更多节点连接）${NC}"
+        echo
+        echo -e "${GREEN}建议：${NC}"
+        echo -e "${CYAN}  • 耐心等待同步完成（这是正常过程）${NC}"
+        echo -e "${CYAN}  • 使用选项 13 持续监控同步进度${NC}"
+        echo -e "${CYAN}  • 如果同步完全停止（超过 24 小时无进展），再考虑换 VPS${NC}"
+    fi
+    
     echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
     echo
     
